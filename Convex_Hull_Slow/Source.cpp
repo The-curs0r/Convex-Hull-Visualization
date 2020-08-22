@@ -52,14 +52,20 @@ const int SCR_HEIGHT = 1080;
 vector<glm::vec3> points;
 vector<glm::vec3> lines;
 
-glm::mat3 mvMatrix = glm::lookAt(glm::vec3(0.0f,0.0f,4.0f),glm::vec3(0.0f),glm::vec3(0.0f,1.0f,0.0f));
-glm::mat3 projMatrix = glm::ortho(-1.0f,1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+glm::mat3 mvMatrix = glm::lookAt(glm::vec3(0.0f,0.0f,1.0f),glm::vec3(0.0f),glm::vec3(0.0f,1.0f,0.0f));
+glm::mat3 projMatrix = glm::ortho(-0.5f,0.5f, -0.5f, 0.5f, -1.0f, 1.0f);
 
 GLuint vao, vbo;
 
 GLuint fbo, resTex,resDep;
 
+int clear = 0,pointSelect=0,findConvexHull=1;
+
 int visited = 0;
+
+ImVec2 vMin, vMax;
+
+double xpos, ypos; //For mouse input
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -69,6 +75,29 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 static void glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "Glfw Error %d: %s\n", error, description);
+}
+
+static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    glfwGetCursorPos(window, &xpos, &ypos);
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        if (pointSelect) {
+            glfwGetCursorPos(window, &xpos, &ypos);
+            //cout << xpos / SCR_WIDTH - 0.5f << " " << ypos / SCR_HEIGHT - 0.5f << "\n";
+            
+            if (xpos > vMin.x && xpos< vMax.x && ypos>vMin.y && ypos < vMax.y){
+                xpos = (xpos - vMin.x) * (SCR_WIDTH) / ((float)(vMax.x - vMin.x)) + 0;
+                ypos = (ypos - vMin.y) * (SCR_HEIGHT) / ((float)(vMax.y - vMin.y)) + 0;
+                cout <<xpos<< " "<<ypos<<" "<< vMax.x << " " << vMax.y << "\n";
+                points.push_back(glm::vec3(xpos / SCR_WIDTH - 0.5f, -ypos / SCR_HEIGHT + 0.5f, 0.0));
+            }
+        }
+    }
 }
 
 int initialize() {
@@ -81,7 +110,18 @@ int initialize() {
     //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  //For mac
     //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            //For mac
 
-    window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Convex Hull Slow", NULL, NULL);
+    //Borderless
+    GLFWmonitor* primary = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = glfwGetVideoMode(primary);
+
+    glfwWindowHint(GLFW_RED_BITS, mode->redBits);
+    glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
+    glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
+    glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+
+    window = glfwCreateWindow(mode->width, mode->height, "My Title", primary, NULL);
+
+    //window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Convex Hull Slow", NULL, NULL);
 
     if (window == NULL)
     {
@@ -92,6 +132,8 @@ int initialize() {
 
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetCursorPosCallback(window, cursor_position_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
 
     //if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     //{
@@ -315,10 +357,10 @@ int main() {
     int fCounter=0;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-
     while (!glfwWindowShouldClose(window))
     {
         processInput(window);
+        cursor_position_callback(window, xpos, ypos);
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -326,31 +368,52 @@ int main() {
 
         
 
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glClearColor(0.4f, 0.7f, 0.1f, 0.0f);  
-
         if (fCounter % 500 == 0) {
-            updateLines();
-            visited++;
-            fCounter/=500;
+            if (pointSelect == 0 && points.size()>1) {
+                updateLines();
+                visited++;
+                fCounter /= 500;
+            }
         }
 
         //cout << lines.size() <<"\n";
+
+
+        //Render Into FrameBuffer
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClearColor(0.4f, 0.7f, 0.1f, 0.0f);
 
         shaderProg.setMat4("mv_matrix", mvMatrix);
         shaderProg.setMat4("proj_matrix", projMatrix);
 
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER,vbo);
-        glBufferData(GL_ARRAY_BUFFER, lines.size()*sizeof(glm::vec3), &lines[0], GL_STATIC_DRAW);
-        glDrawArrays(GL_LINES, 0, lines.size());
-
+        if (pointSelect == 0) {
+            if (lines.size()>3) {
+                glBufferData(GL_ARRAY_BUFFER, lines.size() * sizeof(glm::vec3), &lines[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_LINES, 0, lines.size());
+            }
+            else {
+                pointSelect = 1;
+            }
+            
+        }
+        else if(pointSelect && points.size()){
+            glPointSize(4);
+            glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
+            glDrawArrays(GL_POINTS, 0, points.size());
+            glPointSize(1);
+        }
+        
+        //Increase frame elapsed
         fCounter++;
 
+        //Bind default buffer
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+        //Setup ImGui windows
         ImGui::Begin("ConvexHull");
         {
             // Using a Child allow to fill all the space of the window.
@@ -358,12 +421,56 @@ int main() {
             ImGui::BeginChild("ConvexHull");
             // Get the size of the child (i.e. the whole draw size of the windows).
             ImVec2 wsize = ImGui::GetWindowSize();
+
+            vMin = ImGui::GetWindowContentRegionMin();
+            vMax = ImGui::GetWindowContentRegionMax();
+
+            vMin.x += ImGui::GetWindowPos().x;
+            vMin.y += ImGui::GetWindowPos().y;
+            vMax.x += ImGui::GetWindowPos().x;
+            vMax.y += ImGui::GetWindowPos().y;
+
             // Because I use the texture from OpenGL, I need to invert the V from the UV.
             ImGui::Image((ImTextureID)resTex, wsize, ImVec2(0, 1), ImVec2(1, 0));
             ImGui::EndChild();
         }
         ImGui::End();
 
+        ImGui::Begin("Controls");
+        {
+            if (ImGui::Button("Clear Hull")) {
+                lines.clear();
+                pointSelect = 1;
+            }
+            if (ImGui::Button("Clear Points")) {
+                lines.clear();
+                points.clear();
+                pointSelect = -1;
+            }
+            if (ImGui::Button("Generate Random Points")) {
+                lines.clear();
+                points.clear();
+                initPoints();
+                visited = 0;
+                fCounter = 0;
+                pointSelect = 1;
+            }
+            if (ImGui::Button("Find Convex Hull")) {
+                lines.clear();
+                visited = 0;
+                fCounter = 0;
+                if (points.size()) {
+                    cout << points[0].x << " " << points[0].y << "\n";
+                    pointSelect = 0;
+                }
+            }
+            if (ImGui::Button("Take Screenshot")) {
+                takeSS();
+            }
+        }
+        ImGui::End();
+
+        //Render ImGui windows
         ImGui::Render();
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
