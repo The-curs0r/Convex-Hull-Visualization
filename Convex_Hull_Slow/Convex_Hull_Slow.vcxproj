@@ -87,7 +87,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\Test1\Documents\Coding\OpenGL\IncludeVS\glad\include;C:\Users\Test1\Documents\Coding\OpenGL\IncludeVS\glfw_64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\Test1\Documents\Coding\Computational_Geometry\Convex_Hull_Slow\Deps;C:\Users\Test1\Documents\Coding\OpenGL\IncludeVS\glfw_64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -144,10 +144,26 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="glad.c" />
+    <ClCompile Include="Deps\dear_imgui\imgui.cpp" />
+    <ClCompile Include="Deps\dear_imgui\imgui_demo.cpp" />
+    <ClCompile Include="Deps\dear_imgui\imgui_draw.cpp" />
+    <ClCompile Include="Deps\dear_imgui\imgui_impl_glfw.cpp" />
+    <ClCompile Include="Deps\dear_imgui\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="Deps\dear_imgui\imgui_impl_win32.cpp" />
+    <ClCompile Include="Deps\dear_imgui\imgui_widgets.cpp" />
+    <ClCompile Include="Deps\glad\glad.c" />
     <ClCompile Include="Source.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Deps\dear_imgui\imconfig.h" />
+    <ClInclude Include="Deps\dear_imgui\imgui.h" />
+    <ClInclude Include="Deps\dear_imgui\imgui_impl_glfw.h" />
+    <ClInclude Include="Deps\dear_imgui\imgui_impl_opengl3.h" />
+    <ClInclude Include="Deps\dear_imgui\imgui_impl_win32.h" />
+    <ClInclude Include="Deps\dear_imgui\imgui_internal.h" />
+    <ClInclude Include="Deps\dear_imgui\imstb_rectpack.h" />
+    <ClInclude Include="Deps\dear_imgui\imstb_textedit.h" />
+    <ClInclude Include="Deps\dear_imgui\imstb_truetype.h" />
     <ClInclude Include="shader.hpp" />
   </ItemGroup>
   <ItemGroup>

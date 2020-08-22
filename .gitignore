@@ -15,6 +15,8 @@ glad.c
 .cph/
 *.tga
 *.png
+Deps/
+imgui.ini
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
