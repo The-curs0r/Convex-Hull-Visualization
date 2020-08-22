@@ -13,6 +13,8 @@
 # Specific
 glad.c
 .cph/
+*.tga
+*.png
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

@@ -4,6 +4,7 @@
 #include <glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <Windows.h>
 
 #include "shader.hpp"
 
@@ -20,6 +21,8 @@ glm::mat3 mvMatrix = glm::lookAt(glm::vec3(0.0f,0.0f,4.0f),glm::vec3(0.0f),glm::
 glm::mat3 projMatrix = glm::ortho(-1.0f,1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
 
 GLuint vao, vbo;
+
+GLuint fbo, resTex,resDep;
 
 int visited = 0;
 
@@ -62,6 +65,8 @@ int initialize() {
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
     glEnable(GL_CULL_FACE);*/
 
+    //glReadBuffer(GL_BACK);
+
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
     
@@ -70,11 +75,73 @@ int initialize() {
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
 
+    //Rendering into FBO
+    glCreateFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+
+    glGenTextures(1, &resTex);
+    glBindTexture(GL_TEXTURE_2D, resTex);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, 1920, 1080);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glGenTextures(1, &resDep);
+    glBindTexture(GL_TEXTURE_2D, resDep);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT32F, 1920, 1080);
+
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, resTex, 0);
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, resDep, 0);
+
+    static const GLenum drawBuffers[] = {GL_COLOR_ATTACHMENT0};
+    glDrawBuffers(1, drawBuffers);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     return 1;
 }
 
+void takeSS() {
+    //Saving as .TGA
+    int rowSize = ((SCR_WIDTH * 3 + 3) & ~3);
+    int dataSize = SCR_HEIGHT * rowSize;
+    cout << dataSize << "\n";
+    unsigned char* data = new unsigned char[dataSize];
+#pragma pack (push,1)
+    struct
+    {
+        unsigned char identsize;
+        unsigned char cmaptype;
+        unsigned char imagetype;
+        short cmapstart;
+        short cmapsize;
+        unsigned char cmapbpp;
+        short xorigin;
+        short yorigin;
+        short width;
+        short height;
+        unsigned char bpp;
+        unsigned char descriptor;
+    }tga_header;
+#pragma pack (pop)
+
+    glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_BGR, GL_UNSIGNED_BYTE, data);
+    memset(&tga_header, 0, sizeof(tga_header));
+    tga_header.imagetype = 2;
+    tga_header.width = (short)SCR_WIDTH;
+    tga_header.height = (short)SCR_HEIGHT;
+    tga_header.bpp = 24;
+    FILE* f_out = fopen("Texture.tga", "wb");
+    fwrite(&tga_header, sizeof(tga_header), 1, f_out);
+    fwrite(data, dataSize, 1, f_out);
+    fclose(f_out);
+
+    WinExec("cd ..", 1);
+    WinExec("magick \"./Texture.tga\" -flip \"./Output.png\"", 1);
+    return;
+}
+
 void initPoints() {
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 10; i++)
     {
         float x = (double)(rand()) / (RAND_MAX)-0.5f;
         float y = (double)(rand()) / (RAND_MAX)-0.5f;
@@ -88,6 +155,9 @@ void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_RELEASE)
+            takeSS();
 }
 
 int check(glm::vec3 a, glm::vec3 b, glm::vec3 c) {
@@ -147,6 +217,8 @@ void updateLines() {
     }
 }
 
+
+
 int main() {
     if (initialize() < 0)
         return -1;
@@ -203,5 +275,6 @@ int main() {
         
     }
     cout << val << "\n";*/
+
 	return 0;
 }
