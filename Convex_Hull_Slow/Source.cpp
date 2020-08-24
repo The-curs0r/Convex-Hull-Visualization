@@ -41,8 +41,6 @@ using namespace gl;
 
 #include <GLFW/glfw3.h>
 
-
-
 using namespace std;
 
 GLFWwindow* window;
@@ -51,6 +49,7 @@ const int SCR_HEIGHT = 1080;
 
 vector<glm::vec3> points;
 vector<glm::vec3> lines;
+vector<glm::vec3> boundary;
 
 glm::mat3 mvMatrix = glm::lookAt(glm::vec3(0.0f,0.0f,1.0f),glm::vec3(0.0f),glm::vec3(0.0f,1.0f,0.0f));
 glm::mat3 projMatrix = glm::ortho(-0.5f,0.5f, -0.5f, 0.5f, -1.0f, 1.0f);
@@ -59,9 +58,12 @@ GLuint vao, vbo;
 
 GLuint fbo, resTex,resDep;
 
-int clear = 0,pointSelect=0,findConvexHull=1;
+GLuint mul_fbo, mul_resTex, mul_resDep;
 
-int visited = 0;
+int clear = 0, pointSelect = 0, findConvexHull = 1;
+bool viewHullOnly = false;
+
+int visited = 0, numPoints=10;
 
 ImVec2 vMin, vMax;
 
@@ -89,17 +91,53 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         if (pointSelect) {
             glfwGetCursorPos(window, &xpos, &ypos);
             //cout << xpos / SCR_WIDTH - 0.5f << " " << ypos / SCR_HEIGHT - 0.5f << "\n";
-            
+            //Scaling so that point ends up in window
             if (xpos > vMin.x && xpos< vMax.x && ypos>vMin.y && ypos < vMax.y){
                 xpos = (xpos - vMin.x) * (SCR_WIDTH) / ((float)(vMax.x - vMin.x)) + 0;
                 ypos = (ypos - vMin.y) * (SCR_HEIGHT) / ((float)(vMax.y - vMin.y)) + 0;
-                cout <<xpos<< " "<<ypos<<" "<< vMax.x << " " << vMax.y << "\n";
+                //cout <<xpos<< " "<<ypos<<" "<< vMax.x << " " << vMax.y << "\n";
                 points.push_back(glm::vec3(xpos / SCR_WIDTH - 0.5f, -ypos / SCR_HEIGHT + 0.5f, 0.0));
             }
         }
     }
 }
 
+void CheckFBOStatus(GLuint fbo, GLenum target){
+    GLenum fboStatus = glCheckNamedFramebufferStatus(fbo, target);
+    if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
+        switch (fboStatus)
+        {
+        case GL_FRAMEBUFFER_UNDEFINED:
+            cout << "No window\n";
+            break;
+        case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
+            cout << "Check attachment status\n";
+            break;
+        case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
+            cout << "Attach attachments\n";
+            break;
+        case GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER:
+            cout << "Enable attachments\n";
+            break;
+        case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER:
+            cout << "Check buffer from glReadBuffer exists in FBO\n";
+            break;
+        case GL_FRAMEBUFFER_UNSUPPORTED:
+            cout << "Change formats\n";
+            break;
+        case GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
+            cout << "Number of samples for each multisample is same?\n";
+            break;
+        case GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS:
+            cout << "Number of layers for each multisample is same?\n";
+        default:
+            break;
+        }
+    }
+    else
+        cout << "Complete FBO :D\n";
+    return;
+}
 int initialize() {
 
     glfwSetErrorCallback(glfw_error_callback);
@@ -168,14 +206,6 @@ int initialize() {
     //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);//For Curs0r Movement
     glfwPollEvents();//Continously Checks For Input
     glfwSetCursorPos(window, 1920 / 2, 1080 / 2);
-    glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    /*glEnable(GL_BLEND);
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
-    glEnable(GL_CULL_FACE);*/
-
-    //glReadBuffer(GL_BACK);
 
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
@@ -191,19 +221,37 @@ int initialize() {
 
     glGenTextures(1, &resTex);
     glBindTexture(GL_TEXTURE_2D, resTex);
-    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, 1920, 1080);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     glGenTextures(1, &resDep);
     glBindTexture(GL_TEXTURE_2D, resDep);
-    glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT32F, 1920, 1080);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT32F, SCR_WIDTH, SCR_HEIGHT);
 
     glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, resTex, 0);
     glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, resDep, 0);
 
     static const GLenum drawBuffers[] = {GL_COLOR_ATTACHMENT0};
     glDrawBuffers(1, drawBuffers);
+    CheckFBOStatus(fbo, GL_DRAW_FRAMEBUFFER);
+
+
+    //For multisample FBO
+    glGenFramebuffers(1, &mul_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, mul_fbo);
+    glGenTextures(1, &mul_resTex);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, mul_resTex);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 4, GL_RGB, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, mul_resTex, 0);
+    glGenTextures(1, &mul_resDep);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, mul_resDep);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 4, GL_DEPTH_COMPONENT32F, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D_MULTISAMPLE, mul_resDep, 0);
+    glDrawBuffers(1, drawBuffers);
+    CheckFBOStatus(mul_fbo, GL_DRAW_FRAMEBUFFER);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -227,12 +275,13 @@ int initialize() {
 }
 
 void takeSS() {
+
     //Saving as .TGA
     int rowSize = ((SCR_WIDTH * 3 + 3) & ~3);
     int dataSize = SCR_HEIGHT * rowSize;
     cout << dataSize << "\n";
     unsigned char* data = new unsigned char[dataSize];
-#pragma pack (push,1)
+#pragma pack (push,1) //Aligns structure members on 1-byte boundaries, or on their natural alignment boundary, whichever is less.
     struct
     {
         unsigned char identsize;
@@ -248,7 +297,7 @@ void takeSS() {
         unsigned char bpp;
         unsigned char descriptor;
     }tga_header;
-#pragma pack (pop)
+#pragma pack (pop)  //Same as #pragma pack
 
     glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_BGR, GL_UNSIGNED_BYTE, data);
     memset(&tga_header, 0, sizeof(tga_header));
@@ -261,13 +310,15 @@ void takeSS() {
     fwrite(data, dataSize, 1, f_out);
     fclose(f_out);
 
+    //Converting to PNG
     WinExec("cd ..", 1);
     WinExec("magick \"./Texture.tga\" -flip \"./Output.png\"", 1);
+    
     return;
 }
 
 void initPoints() {
-    for (int i = 0; i < 60; i++)
+    for (int i = 0; i < numPoints; i++)
     {
         float x = (double)(rand()) / (RAND_MAX)-0.5f;
         float y = (double)(rand()) / (RAND_MAX)-0.5f;
@@ -336,6 +387,8 @@ void updateLines() {
         if (!flag) {
             lines.push_back(glm::vec3(points[visited].x, points[visited].y, 1.0f));
             lines.push_back(glm::vec3(points[j].x, points[j].y, 1.0f));
+            boundary.push_back(glm::vec3(points[visited].x, points[visited].y, 1.0f));
+            boundary.push_back(glm::vec3(points[j].x, points[j].y, 1.0f));
             continue;
         }
         lines.push_back(glm::vec3(points[visited].x, points[visited].y, 0.0f));
@@ -380,7 +433,8 @@ int main() {
 
 
         //Render Into FrameBuffer
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+            //glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+            glBindFramebuffer(GL_FRAMEBUFFER, mul_fbo);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glClearColor(0.4f, 0.7f, 0.1f, 0.0f);
@@ -391,7 +445,11 @@ int main() {
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER,vbo);
         if (pointSelect == 0) {
-            if (lines.size()>3) {
+            if (viewHullOnly && boundary.size()>3) {
+                glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_LINES, 0, boundary.size());
+            }
+            else if (lines.size()>3) {
                 glBufferData(GL_ARRAY_BUFFER, lines.size() * sizeof(glm::vec3), &lines[0], GL_STATIC_DRAW);
                 glDrawArrays(GL_LINES, 0, lines.size());
             }
@@ -410,8 +468,16 @@ int main() {
         //Increase frame elapsed
         fCounter++;
 
+        //Blit to normal FBO
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, mul_fbo);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
+        glBlitFramebuffer(0,0,SCR_WIDTH,SCR_HEIGHT,0,0,SCR_WIDTH,SCR_HEIGHT,GL_COLOR_BUFFER_BIT,GL_NEAREST);
+
         //Bind default buffer
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glDisable(GL_DEPTH_TEST);
 
         //Setup ImGui windows
         ImGui::Begin("ConvexHull");
@@ -430,8 +496,9 @@ int main() {
             vMax.x += ImGui::GetWindowPos().x;
             vMax.y += ImGui::GetWindowPos().y;
 
-            // Because I use the texture from OpenGL, I need to invert the V from the UV.
-            ImGui::Image((ImTextureID)resTex, wsize, ImVec2(0, 1), ImVec2(1, 0));
+            // Use the texture from OpenGL, invert the V from the UV.
+                ImGui::Image((ImTextureID)resTex, wsize, ImVec2(0, 1), ImVec2(1, 0));
+                //ImGui::Image((ImTextureID)mul_resTex, wsize, ImVec2(0, 1), ImVec2(1, 0));
             ImGui::EndChild();
         }
         ImGui::End();
@@ -440,21 +507,26 @@ int main() {
         {
             if (ImGui::Button("Clear Hull")) {
                 lines.clear();
+                boundary.clear();
                 pointSelect = 1;
             }
             if (ImGui::Button("Clear Points")) {
                 lines.clear();
+                boundary.clear();
                 points.clear();
                 pointSelect = -1;
             }
             if (ImGui::Button("Generate Random Points")) {
                 lines.clear();
+                boundary.clear();
                 points.clear();
                 initPoints();
                 visited = 0;
                 fCounter = 0;
                 pointSelect = 1;
             }
+            ImGui::SliderInt("Number Of Points", &numPoints, 3, 100);
+
             if (ImGui::Button("Find Convex Hull")) {
                 lines.clear();
                 visited = 0;
@@ -467,6 +539,7 @@ int main() {
             if (ImGui::Button("Take Screenshot")) {
                 takeSS();
             }
+            ImGui::Checkbox("View Hull Only", &viewHullOnly);
         }
         ImGui::End();
 
