@@ -60,8 +60,8 @@ GLuint fbo, resTex,resDep;
 
 GLuint mul_fbo, mul_resTex, mul_resDep;
 
-int clear = 0, pointSelect = 0, findConvexHull = 1;
-bool viewHullOnly = false;
+int clear = 0, pointSelect = 0, findConvexHull = 1, takeImage=0;
+bool viewHullOnly = false, AAFlag = false, prevAAFlag = false;
 
 int visited = 0, numPoints=10;
 
@@ -242,12 +242,12 @@ int initialize() {
     glBindFramebuffer(GL_FRAMEBUFFER, mul_fbo);
     glGenTextures(1, &mul_resTex);
     glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, mul_resTex);
-    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 4, GL_RGB, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 1, GL_RGB, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
     glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, mul_resTex, 0);
     glGenTextures(1, &mul_resDep);
     glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, mul_resDep);
-    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 4, GL_DEPTH_COMPONENT32F, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 1, GL_DEPTH_COMPONENT32F, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
     glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D_MULTISAMPLE, mul_resDep, 0);
     glDrawBuffers(1, drawBuffers);
@@ -317,6 +317,23 @@ void takeSS() {
     return;
 }
 
+void changeSamples(GLsizei flag) {
+    glBindFramebuffer(GL_FRAMEBUFFER, mul_fbo);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, mul_resTex);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, flag, GL_RGB, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, mul_resTex, 0);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, mul_resDep);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, flag, GL_DEPTH_COMPONENT32F, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D_MULTISAMPLE, mul_resDep, 0);
+    static const GLenum drawBuffers[] = { GL_COLOR_ATTACHMENT0 };
+    glDrawBuffers(1, drawBuffers);
+    CheckFBOStatus(mul_fbo, GL_DRAW_FRAMEBUFFER);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void initPoints() {
     for (int i = 0; i < numPoints; i++)
     {
@@ -350,6 +367,31 @@ int check(glm::vec3 a, glm::vec3 b, glm::vec3 c) {
 bool comp(glm::vec3 a, glm::vec3 b) {
     if (a.x == b.x && a.y == b.y && a.z == b.z) return true;
     return false;
+}
+
+void cleanUp() {
+    
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+
+    glDeleteFramebuffers(1, &fbo);
+    glDeleteFramebuffers(1, &mul_fbo);
+
+    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &vbo);
+    
+    glDeleteTextures(1, &mul_resTex);
+    glDeleteTextures(1, &mul_resDep);
+    glDeleteTextures(1, &resDep);
+    glDeleteTextures(1, &resTex);
+    
+    points.clear();
+    lines.clear();
+    boundary.clear();
 }
 
 void updateLines() {
@@ -419,25 +461,22 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        
-
         if (fCounter % 500 == 0) {
-            if (pointSelect == 0 && points.size()>1) {
+            if (pointSelect == 0 && points.size() > 1) {
                 updateLines();
                 visited++;
                 fCounter /= 500;
             }
         }
 
-        //cout << lines.size() <<"\n";
-
+        glClearColor(0.4f, 0.7f, 0.1f, 0.0f);
+        glEnable(GL_DEPTH_TEST);
 
         //Render Into FrameBuffer
             //glBindFramebuffer(GL_FRAMEBUFFER, fbo);
             glBindFramebuffer(GL_FRAMEBUFFER, mul_fbo);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glClearColor(0.4f, 0.7f, 0.1f, 0.0f);
 
         shaderProg.setMat4("mv_matrix", mvMatrix);
         shaderProg.setMat4("proj_matrix", projMatrix);
@@ -469,9 +508,10 @@ int main() {
         fCounter++;
 
         //Blit to normal FBO
+        
         glBindFramebuffer(GL_READ_FRAMEBUFFER, mul_fbo);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
-        glBlitFramebuffer(0,0,SCR_WIDTH,SCR_HEIGHT,0,0,SCR_WIDTH,SCR_HEIGHT,GL_COLOR_BUFFER_BIT,GL_NEAREST);
+        glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
         //Bind default buffer
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -498,7 +538,6 @@ int main() {
 
             // Use the texture from OpenGL, invert the V from the UV.
                 ImGui::Image((ImTextureID)resTex, wsize, ImVec2(0, 1), ImVec2(1, 0));
-                //ImGui::Image((ImTextureID)mul_resTex, wsize, ImVec2(0, 1), ImVec2(1, 0));
             ImGui::EndChild();
         }
         ImGui::End();
@@ -537,8 +576,10 @@ int main() {
                 }
             }
             if (ImGui::Button("Take Screenshot")) {
-                takeSS();
+                takeImage = 1;
+                //takeSS();
             }
+            ImGui::Checkbox("Anti-aliasing", &AAFlag);
             ImGui::Checkbox("View Hull Only", &viewHullOnly);
         }
         ImGui::End();
@@ -552,17 +593,22 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+        if (takeImage) takeSS(), takeImage = !takeImage;
+        if (AAFlag != prevAAFlag) {
+            if (AAFlag) changeSamples((GLsizei)8);
+            else changeSamples((GLsizei)1);
+            prevAAFlag = !prevAAFlag;
+        }
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-
-    glfwDestroyWindow(window);
-    glfwTerminate();
     std::cout << lines.size() << "\n";
+
+    shaderProg.deleteProg();
+    cleanUp(); 
+    
 
     /*int val = 0;
     for (int k = 0; k + 1 < lines.size(); k+=2)
