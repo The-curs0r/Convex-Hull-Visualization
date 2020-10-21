@@ -15,7 +15,9 @@ glad.c
 .cph/
 *.tga
 *.png
-Deps/
+Deps/dear_imgui/
+Deps/glad/
+Deps/glfw_64/
 imgui.ini
 
 # User-specific files (MonoDevelop/Xamarin Studio)
