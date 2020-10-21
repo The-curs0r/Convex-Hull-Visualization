@@ -31,6 +31,11 @@ using namespace std;
 
 Point referencePoint;///<Reference point for angle calculations
 
+void setReferencePoint(Point reference) {
+	referencePoint = reference;
+	return;
+}
+
 /**
 	*   double findDistance(Point v1, Point v2)
 	*

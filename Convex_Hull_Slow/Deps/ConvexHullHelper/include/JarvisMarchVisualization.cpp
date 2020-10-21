@@ -8,7 +8,7 @@
 #include "Point.hpp"
 #include <iostream>
 
-#define PI 3.141592 ///<Value of PI i.e. 3.141592
+#define PI 3.141592 
 
 std::vector<Point> inputVertices;
 std::vector<Point> currentHull;

@@ -182,7 +182,7 @@ void getHull(const vector<Point>& pointSet, vector<Point>& hull, const Point& le
         if (antiClockwise(farthestPoint, rightEndpoint, p) > 0) {
             right.push_back(p);
         }
-    }
+    } 
     getHull(right, hull, farthestPoint, rightEndpoint);
 }
 
