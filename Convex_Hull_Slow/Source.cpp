@@ -5,17 +5,20 @@
 #include "./Deps/dear_imgui/imgui.h"
 #include "./Deps/dear_imgui/imgui_impl_glfw.h"
 #include "./Deps/dear_imgui/imgui_impl_opengl3.h"
+#include <ConvexHull.hpp>
+#include <JarvisMarchVisualization.hpp>
 
 #include <glm/glm.hpp>
 #include <iostream>
 #include <vector>
+#include <utility>
+#include <set>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <Windows.h>
 
+
 #include "shader.hpp"
-
-
 
 #if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
 #include <GL/gl3w.h>            // Initialize with gl3wInit()
@@ -46,10 +49,16 @@ using namespace std;
 GLFWwindow* window;
 const int SCR_WIDTH = 1920;
 const int SCR_HEIGHT = 1080;
+int methodFlag = 0,prevMethodFlag;
 
 vector<glm::vec3> points;
 vector<glm::vec3> lines;
 vector<glm::vec3> boundary;
+
+//For visualization
+vector<glm::vec3> currentCheck;
+vector<glm::vec3> currentChecked;
+glm::vec3 currentPoint;
 
 glm::mat3 mvMatrix = glm::lookAt(glm::vec3(0.0f,0.0f,1.0f),glm::vec3(0.0f),glm::vec3(0.0f,1.0f,0.0f));
 glm::mat3 projMatrix = glm::ortho(-0.5f,0.5f, -0.5f, 0.5f, -1.0f, 1.0f);
@@ -138,6 +147,56 @@ void CheckFBOStatus(GLuint fbo, GLenum target){
         cout << "Complete FBO :D\n";
     return;
 }
+
+void convexHullLibrary(int method) {
+    if (method == 0) {
+        return;
+    }
+    if (method == 4) {
+        nextIterationJarvis();
+        vector<pair<double, double> > hull = getCurrentHullJarvis();
+        boundary.clear();
+        currentCheck.clear();
+        currentChecked.clear();
+
+        //NOTE - Z COORDINATE IS COLOR FOR NOW
+        for (auto i : hull) {
+            boundary.push_back(glm::vec3(i.first, i.second, 0.0f));
+        }
+        hull = getCurrentCheckJarvis();
+        for (auto i : hull) {
+            if (i.first != NULL)
+                currentCheck.push_back(glm::vec3(i.first, i.second, 1.0f));
+        }
+        hull = getCurrentHullLineJarvis();
+        for (auto i : hull) {
+            if (i.first != NULL)
+                currentCheck.push_back(glm::vec3(i.first, i.second, 0.5f));
+        }
+        hull.clear();
+        pair<double, double> curPoint = getCurrentHullPointJarvis();
+        currentPoint = glm::vec3(curPoint.first,curPoint.second,1.0f);
+        return;
+    }
+
+
+    set<pair<double, double> > inputPoints;
+    for (auto i : points) {
+        inputPoints.insert(make_pair(i.x, i.y));
+    }
+    vector<pair<double, double> > hull = method == 1 ? findConvexHullGraham(inputPoints) : (method == 2 ? findConvexHullJarvis(inputPoints) : findConvexHullQuickHull(inputPoints));
+    boundary.clear();
+    lines.clear();
+    
+    for (auto i : hull) {
+        boundary.push_back(glm::vec3(i.first,i.second,0.0f));
+    }
+    cout << hull.size() << "\n";
+    hull.clear();
+    inputPoints.clear();
+    return;
+}
+
 int initialize() {
 
     glfwSetErrorCallback(glfw_error_callback);
@@ -149,7 +208,7 @@ int initialize() {
     //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            //For mac
 
     //Borderless
-    GLFWmonitor* primary = glfwGetPrimaryMonitor();
+    /*GLFWmonitor* primary = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(primary);
 
     glfwWindowHint(GLFW_RED_BITS, mode->redBits);
@@ -157,9 +216,9 @@ int initialize() {
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 
-    window = glfwCreateWindow(mode->width, mode->height, "My Title", primary, NULL);
+    window = glfwCreateWindow(mode->width, mode->height, "My Title", primary, NULL);*/
 
-    //window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Convex Hull Slow", NULL, NULL);
+    window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Convex Hull Slow", NULL, NULL);
 
     if (window == NULL)
     {
@@ -461,11 +520,16 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        
         if (fCounter % 500 == 0) {
-            if (pointSelect == 0 && points.size() > 1) {
+            if (pointSelect == 0 && points.size() > 1 && !methodFlag) {
                 updateLines();
                 visited++;
                 fCounter /= 500;
+            }
+            if (pointSelect == 0 && points.size() > 1 && methodFlag==4) {
+                convexHullLibrary(4);
+                fCounter /= 50;
             }
         }
 
@@ -483,32 +547,113 @@ int main() {
 
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER,vbo);
-        if (pointSelect == 0) {
-            if (viewHullOnly && boundary.size()>3) {
-                glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
-                glDrawArrays(GL_LINES, 0, boundary.size());
+        if (!methodFlag) {
+            if (pointSelect == 0) {
+                if (viewHullOnly && boundary.size() > 3) {
+                    glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
+                    glDrawArrays(GL_LINES, 0, boundary.size());
+                }
+                else if (lines.size() > 3) {
+                    glBufferData(GL_ARRAY_BUFFER, lines.size() * sizeof(glm::vec3), &lines[0], GL_STATIC_DRAW);
+                    glDrawArrays(GL_LINES, 0, lines.size());
+                }
+                else {
+                    pointSelect = 1;
+                }
+
             }
-            else if (lines.size()>3) {
-                glBufferData(GL_ARRAY_BUFFER, lines.size() * sizeof(glm::vec3), &lines[0], GL_STATIC_DRAW);
-                glDrawArrays(GL_LINES, 0, lines.size());
+            else if (pointSelect && points.size()) {
+                glPointSize(4);
+                glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_POINTS, 0, points.size());
+                glPointSize(1);
+            }
+        }
+        else if (methodFlag == 1 || methodFlag == 2) {
+            if (viewHullOnly) {
+                glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_LINE_LOOP, 0, boundary.size());
+            }
+            else if (pointSelect) {
+                glPointSize(4);
+                glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_POINTS, 0, points.size());
+                glPointSize(1);
             }
             else {
-                pointSelect = 1;
+                glPointSize(4);
+                glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_POINTS, 0, points.size());
+                glPointSize(1);
+                glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_LINE_LOOP, 0, boundary.size());
             }
             
         }
-        else if(pointSelect && points.size()){
-            glPointSize(4);
-            glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
-            glDrawArrays(GL_POINTS, 0, points.size());
-            glPointSize(1);
+        else if (methodFlag == 3) {
+            if (viewHullOnly) {
+                glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_LINE_LOOP, 0, boundary.size());
+            }
+            else if (pointSelect) {
+                glPointSize(4);
+                glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_POINTS, 0, points.size());
+                glPointSize(1);
+            }
+            else {
+                glPointSize(4);
+                glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_POINTS, 0, points.size());
+                glPointSize(1);
+                glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_LINE_LOOP, 0, boundary.size());
+            }
         }
-        
+        else if (methodFlag == 4) {
+            if (viewHullOnly) {
+                glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_LINE_LOOP, 0, boundary.size());
+            }
+            else if (pointSelect) {
+                glPointSize(4);
+                glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_POINTS, 0, points.size());
+                glPointSize(1);
+            }
+            else {
+                glPointSize(4);
+                glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
+                glDrawArrays(GL_POINTS, 0, points.size());
+                glPointSize(1);
+                if (boundary.size()>=2)
+                {
+                    glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
+                    glDrawArrays(GL_LINE_STRIP, 0, boundary.size());
+                }
+                if (currentCheck.size() >= 2)
+                {
+                    glBufferData(GL_ARRAY_BUFFER, currentCheck.size() * sizeof(glm::vec3), &currentCheck[0], GL_STATIC_DRAW);
+                    glDrawArrays(GL_LINE_LOOP, 0, currentCheck.size());
+                }
+                if (currentChecked.size() >= 2)
+                {
+                    glBufferData(GL_ARRAY_BUFFER, currentChecked.size() * sizeof(glm::vec3), &currentChecked[0], GL_STATIC_DRAW);
+                    glDrawArrays(GL_LINE_LOOP, 0, currentChecked.size());
+                }
+                if (currentPoint.x != NULL)
+                {
+                    glPointSize(8);
+                    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3), &currentPoint, GL_STATIC_DRAW);
+                    glDrawArrays(GL_POINTS, 0, 1);
+                    glPointSize(1);
+                }
+            }
+        }
         //Increase frame elapsed
         fCounter++;
 
         //Blit to normal FBO
-        
         glBindFramebuffer(GL_READ_FRAMEBUFFER, mul_fbo);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
         glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST);
@@ -564,21 +709,58 @@ int main() {
                 fCounter = 0;
                 pointSelect = 1;
             }
-            ImGui::SliderInt("Number Of Points", &numPoints, 3, 100);
+            ImGui::SliderInt("Number Of Points", &numPoints, 3, 1000);
 
             if (ImGui::Button("Find Convex Hull")) {
-                lines.clear();
+                if (prevMethodFlag == 0) {
+                    lines.clear();
+                    visited = 0;
+                    fCounter = 0;
+                    if (points.size()) {
+                        cout << points[0].x << " " << points[0].y << "\n";
+                        pointSelect = 0;
+                    }
+                }
+                else {
+                    boundary.clear();
+                    lines.clear();
+                    visited = 0;
+                    fCounter = 0;
+                    if (points.size()) {
+                        cout << points[0].x << " " << points[0].y << "\n";
+                        pointSelect = 0;
+                    }
+
+                    //Fix this
+                    if (prevMethodFlag == 4) {
+                        set <pair<double, double> > pointSet;
+                        for (auto i : points)
+                            pointSet.insert(make_pair(i.x,i.y));
+                        loadPointsJarvis(pointSet);
+                    }
+                    convexHullLibrary(prevMethodFlag);
+                }
+                /*lines.clear();
                 visited = 0;
                 fCounter = 0;
                 if (points.size()) {
                     cout << points[0].x << " " << points[0].y << "\n";
                     pointSelect = 0;
-                }
+                }*/
             }
             if (ImGui::Button("Take Screenshot")) {
                 takeImage = 1;
                 //takeSS();
             }
+            ImGui::RadioButton("Slow Convex Hull", &methodFlag, 0); ImGui::SameLine();
+            ImGui::RadioButton("Graham Scan", &methodFlag, 1); ImGui::SameLine();
+            ImGui::RadioButton("Jarvis March", &methodFlag, 2); ImGui::SameLine();
+            ImGui::RadioButton("Quick Hull", &methodFlag, 3);
+
+            //Visualizations
+            ImGui::RadioButton("Jarvis Visulaization", &methodFlag, 4);
+
+
             ImGui::Checkbox("Anti-aliasing", &AAFlag);
             ImGui::Checkbox("View Hull Only", &viewHullOnly);
         }
@@ -599,7 +781,12 @@ int main() {
             else changeSamples((GLsizei)1);
             prevAAFlag = !prevAAFlag;
         }
-
+        if (methodFlag != prevMethodFlag) {
+            prevMethodFlag = methodFlag;
+            lines.clear();
+            boundary.clear();
+            pointSelect = 1;
+        }
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -608,24 +795,6 @@ int main() {
 
     shaderProg.deleteProg();
     cleanUp(); 
-    
-
-    /*int val = 0;
-    for (int k = 0; k + 1 < lines.size(); k+=2)
-    {
-            glm::vec3 at = lines[k+1];
-            glm::vec3 bt = lines[k];
-            for (int i = 0; i+1 < lines.size(); i+=2)
-            {
-                if (i == k)continue;
-                if ((comp(lines[i], at) && comp(lines[i + 1], bt)) || (comp(lines[i], bt) && comp(lines[i + 1], at))) {
-                    std::cout << "yeaea\n";
-                    val++;
-                }
-            }
-        
-    }
-    cout << val << "\n";*/
 
 	return 0;
 }
