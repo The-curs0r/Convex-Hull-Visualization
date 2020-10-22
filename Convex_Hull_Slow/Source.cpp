@@ -1,14 +1,11 @@
-//y this not work
-//#include <dear_imgui/imgui.h>
-//#include <dear_imgui/imgui_impl_glfw.h>
-//#include <dear_imgui/imgui_impl_opengl3.h>
+//ORGANISE CODE PLIS ;-;
 
-#include "./Deps/dear_imgui/imgui.h"
-#include "./Deps/dear_imgui/imgui_impl_glfw.h"
-#include "./Deps/dear_imgui/imgui_impl_opengl3.h"
+#include <dear_imgui/imgui.h>
+#include <dear_imgui/imgui_impl_glfw.h>
+#include <dear_imgui/imgui_impl_opengl3.h>
 #include <ConvexHull.hpp>
 
-//Put all these into 1 header?
+//Put all these into 1 header?w
 #include <JarvisMarchVisualization.hpp>
 #include <GrahamScanVisualization.hpp>
 #include <QuickHullVisualization.hpp>
@@ -23,9 +20,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <Windows.h>
 
-
 #include "shader.hpp"
 
+//Include appropriate OpenGL Loader
 #if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
 #include <GL/gl3w.h>            // Initialize with gl3wInit()
 #elif defined(IMGUI_IMPL_OPENGL_LOADER_GLEW)
@@ -47,6 +44,8 @@ using namespace gl;
 #else
 #include IMGUI_IMPL_OPENGL_LOADER_CUSTOM
 #endif
+
+//Include GLFW
 
 #include <GLFW/glfw3.h>
 
@@ -105,12 +104,10 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     {
         if (pointSelect) {
             glfwGetCursorPos(window, &xpos, &ypos);
-            //cout << xpos / SCR_WIDTH - 0.5f << " " << ypos / SCR_HEIGHT - 0.5f << "\n";
             //Scaling so that point ends up in window
-            if (xpos > vMin.x && xpos< vMax.x && ypos>vMin.y && ypos < vMax.y){
+            if (xpos > vMin.x && xpos< vMax.x && ypos>vMin.y && ypos < vMax.y) {
                 xpos = (xpos - vMin.x) * (SCR_WIDTH) / ((float)(vMax.x - vMin.x)) + 0;
                 ypos = (ypos - vMin.y) * (SCR_HEIGHT) / ((float)(vMax.y - vMin.y)) + 0;
-                //cout <<xpos<< " "<<ypos<<" "<< vMax.x << " " << vMax.y << "\n";
                 points.push_back(glm::vec3(xpos / SCR_WIDTH - 0.5f, -ypos / SCR_HEIGHT + 0.5f, 0.0));
             }
         }
@@ -155,6 +152,10 @@ void CheckFBOStatus(GLuint fbo, GLenum target){
 }
 
 void convexHullLibrary(int method) {
+
+    if (points.size() == 0)
+        return;
+
     if (method == 0) {
         return;
     }
@@ -223,7 +224,6 @@ void convexHullLibrary(int method) {
         //NOTE - Z COORDINATE IS COLOR FOR NOW
         //cout << getStackSize() << "\n";
         for (auto i : hull) {
-            //cout << i.first << " " << i.second << "\n";
             boundary.push_back(glm::vec3(i.first, i.second, 0.0f));
         }
         if (!doneLeft()) 
@@ -247,29 +247,27 @@ void convexHullLibrary(int method) {
         nextIterationAndrewMonotone();
         vector<pair<double, double> > hull = getCurrentHullAndrewMonotone();
         //NOTE - Z COORDINATE IS COLOR FOR NOW
-        //cout << getStackSize() << "\n";
         for (auto i : hull) {
-            //cout << i.first << " " << i.second << "\n";
             boundary.push_back(glm::vec3(i.first, i.second, 0.0f));
         }
         if (!doneAndrewMonotone())
         {
             if (boundary.size() >= 1)
-                boundary[boundary.size() - 1][2] = 1.0f;
+                boundary[0][2] = 1.0f;
             if(boundary.size()>=2)
-                boundary[boundary.size() - 2][2] = 1.0f;
+                boundary[1][2] = 1.0f;
         }
         hull.clear();
         return;
     }
 
+    //Put in separate function?? Copies glm::vec3[0] and [1]  to set of pair
     set<pair<double, double> > inputPoints;
     for (auto i : points) {
         inputPoints.insert(make_pair(i.x, i.y));
     }
 
     vector<pair<double, double> > hull;
-    // = method ? (method == 1 ? findConvexHullJarvis(vertices) : findConvexHullQuickHull(vertices)) : findConvexHullGraham(vertices);
     switch (method)
     {
     case 2:
@@ -286,13 +284,15 @@ void convexHullLibrary(int method) {
         break;
     }
 
-    //vector<pair<double, double> > hull = method == 1 ? findConvexHullGraham(inputPoints) : (method == 2 ? findConvexHullJarvis(inputPoints) : findConvexHullQuickHull(inputPoints));
+
     boundary.clear();
     lines.clear();
-    
+
+    //Put in separate function?? Copies set of pair to glm::vec3[0] and [1]
     for (auto i : hull) {
         boundary.push_back(glm::vec3(i.first,i.second,0.0f));
     }
+
     cout << hull.size() << "\n";
     hull.clear();
     inputPoints.clear();
@@ -309,36 +309,31 @@ int initialize() {
     //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  //For mac
     //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            //For mac
 
-    //Borderless
-    /*GLFWmonitor* primary = glfwGetPrimaryMonitor();
+    //Borderless in release mode, don't fool around unless you want to sign out or restart
+#if defined(_DEBUG)
+    window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Convex Hull Slow", NULL, NULL);
+#else
+    GLFWmonitor* primary = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(primary);
-
     glfwWindowHint(GLFW_RED_BITS, mode->redBits);
     glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
-
-    window = glfwCreateWindow(mode->width, mode->height, "My Title", primary, NULL);*/
-
-    window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Convex Hull Slow", NULL, NULL);
-
+    window = glfwCreateWindow(mode->width, mode->height, "Convex Hull Algorithms", primary, NULL);
+#endif
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
         return -1;
     }
-
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, cursor_position_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
-
-    //if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    //{
-    //    std::cout << "Failed to initialize GLAD" << std::endl;
-    //    return -1;
-    //}
+    glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);//For Key Input
+    glfwPollEvents();//Continously Checks For Input
+    glfwSetCursorPos(window, 1920 / 2, 1080 / 2);
 
 #if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
     bool err = gl3wInit() != 0;
@@ -363,10 +358,7 @@ int initialize() {
         return 1;
     }
 
-    glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);//For Key Input
-    //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);//For Curs0r Movement
-    glfwPollEvents();//Continously Checks For Input
-    glfwSetCursorPos(window, 1920 / 2, 1080 / 2);
+    
 
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
@@ -417,18 +409,13 @@ int initialize() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 
-    // Setup Dear ImGui context
+    // Setup Dear ImGui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-    // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    //ImGui::StyleColorsClassic();
-
-    // Setup Platform/Renderer bindings
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
@@ -436,7 +423,6 @@ int initialize() {
 }
 
 void takeSS() {
-
     //Saving as .TGA
     int rowSize = ((SCR_WIDTH * 3 + 3) & ~3);
     int dataSize = SCR_HEIGHT * rowSize;
@@ -466,7 +452,7 @@ void takeSS() {
     tga_header.width = (short)SCR_WIDTH;
     tga_header.height = (short)SCR_HEIGHT;
     tga_header.bpp = 24;
-    FILE* f_out = fopen("Texture.tga", "wb");
+    FILE* f_out = fopen("ScreenShot.tga", "wb");
     fwrite(&tga_header, sizeof(tga_header), 1, f_out);
     fwrite(data, dataSize, 1, f_out);
     fclose(f_out);
@@ -491,8 +477,8 @@ void changeSamples(GLsizei flag) {
     static const GLenum drawBuffers[] = { GL_COLOR_ATTACHMENT0 };
     glDrawBuffers(1, drawBuffers);
     CheckFBOStatus(mul_fbo, GL_DRAW_FRAMEBUFFER);
-
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return;
 }
 
 void initPoints() {
@@ -519,15 +505,8 @@ int check(glm::vec3 a, glm::vec3 b, glm::vec3 c) {
     float slope = (b.y - a.y) / (b.x - a.x);
     float y = c.y - a.y;
     float x = slope * (c.x - a.x);
-    //if (abs(y - x) < 0.00001) return 0;
-    if (y > x) return 1;
     if (y < x) return -1;
     return 1;
-}
-
-bool comp(glm::vec3 a, glm::vec3 b) {
-    if (a.x == b.x && a.y == b.y && a.z == b.z) return true;
-    return false;
 }
 
 void cleanUp() {
@@ -559,21 +538,6 @@ void updateLines() {
     if (visited >= points.size()) return;
     for (int j = visited + 1; j < points.size(); j++)
     {
-        //int chk = 0;
-        ////cout << lines.size() << "\n";
-        //glm::vec3 at = glm::vec3(points[j].x, points[j].y, 1.0f);
-        //glm::vec3 af = glm::vec3(points[j].x, points[j].y, 0.0f);
-        //glm::vec3 bt = glm::vec3(points[visited].x, points[visited].y, 1.0f);
-        //glm::vec3 bf = glm::vec3(points[visited].x, points[visited].y, 0.0f);
-        //for (int i = 0; i + 1 < lines.size(); i+=2)
-        //{
-        //    if ((comp(lines[i],at)&&  comp(lines[i + 1],bt)) || (comp(lines[i], bt) && comp(lines[i + 1], at)) || (comp(lines[i], af) && comp(lines[i + 1], bf)) || (comp(lines[i], bf) && comp(lines[i + 1], af))) {
-        //        chk = 1;
-        //        //std::cout << "yeaea\n";
-        //    }
-        //}
-        //if (chk) continue;
-
         int flag = 0, val = -2;
         for (int i = 0; i < points.size(); i++)
         {

@@ -8,7 +8,12 @@
 #include "AndrewMonotoneVisualization.hpp"
 //For orientation and second point function
 #include "GrahamScan.hpp"
-#include "AndrewMonotone.hpp"
+//#include "AndrewMonotone.hpp"
+
+bool customSortByCoordinate2(const Point& v1, const Point& v2)
+{
+	return v1.x == v2.x ? v1.y < v2.y : v1.x < v2.x;
+}
 
 std::vector<Point> inputVerticesAndrew;
 std::vector<Point> inputVerticesAndrewCpy;
@@ -58,7 +63,7 @@ void loadPointsAndrewMonotone(std::set<std::pair<double, double> > inputPoints)
 		current.y = point.second;
 		inputVerticesAndrew.push_back(current);
 	}
-	std::sort(inputVerticesAndrew.begin(), inputVerticesAndrew.end(), customSortByCoordinate);
+	std::sort(inputVerticesAndrew.begin(), inputVerticesAndrew.end(), customSortByCoordinate2);
 	inputVerticesAndrewCpy = inputVerticesAndrew;
 	std::reverse(inputVerticesAndrewCpy.begin(), inputVerticesAndrewCpy.end());
 }
