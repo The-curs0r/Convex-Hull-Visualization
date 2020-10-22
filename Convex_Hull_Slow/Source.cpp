@@ -12,6 +12,7 @@
 #include <JarvisMarchVisualization.hpp>
 #include <GrahamScanVisualization.hpp>
 #include <QuickHullVisualization.hpp>
+#include <AndrewMonotoneVisualization.hpp>
 
 #include <glm/glm.hpp>
 #include <iostream>
@@ -237,12 +238,55 @@ void convexHullLibrary(int method) {
         hull.clear();
         return;
     }
+    if (method == 8) {
+
+        boundary.clear();
+        currentCheck.clear();
+        currentChecked.clear();
+
+        nextIterationAndrewMonotone();
+        vector<pair<double, double> > hull = getCurrentHullAndrewMonotone();
+        //NOTE - Z COORDINATE IS COLOR FOR NOW
+        //cout << getStackSize() << "\n";
+        for (auto i : hull) {
+            //cout << i.first << " " << i.second << "\n";
+            boundary.push_back(glm::vec3(i.first, i.second, 0.0f));
+        }
+        if (!doneAndrewMonotone())
+        {
+            if (boundary.size() >= 1)
+                boundary[boundary.size() - 1][2] = 1.0f;
+            if(boundary.size()>=2)
+                boundary[boundary.size() - 2][2] = 1.0f;
+        }
+        hull.clear();
+        return;
+    }
 
     set<pair<double, double> > inputPoints;
     for (auto i : points) {
         inputPoints.insert(make_pair(i.x, i.y));
     }
-    vector<pair<double, double> > hull = method == 1 ? findConvexHullGraham(inputPoints) : (method == 2 ? findConvexHullJarvis(inputPoints) : findConvexHullQuickHull(inputPoints));
+
+    vector<pair<double, double> > hull;
+    // = method ? (method == 1 ? findConvexHullJarvis(vertices) : findConvexHullQuickHull(vertices)) : findConvexHullGraham(vertices);
+    switch (method)
+    {
+    case 2:
+        hull = findConvexHullJarvis(inputPoints);
+        break;
+    case 1:
+        hull = findConvexHullGraham(inputPoints);
+        break;
+    case 3:
+        hull = findConvexHullQuickHull(inputPoints);
+        break;
+    case 7:
+        hull = findConvexHullAndrewMonotone(inputPoints);
+        break;
+    }
+
+    //vector<pair<double, double> > hull = method == 1 ? findConvexHullGraham(inputPoints) : (method == 2 ? findConvexHullJarvis(inputPoints) : findConvexHullQuickHull(inputPoints));
     boundary.clear();
     lines.clear();
     
@@ -579,7 +623,7 @@ int main() {
         ImGui::NewFrame();
 
         
-        if (fCounter % 50 == 0) {
+        if (fCounter % 1000 == 0) {
             if (pointSelect == 0 && points.size() > 1 && !methodFlag) {
                 updateLines();
                 visited++;
@@ -627,7 +671,7 @@ int main() {
                 glPointSize(1);
             }
         }
-        else if (methodFlag == 1 || methodFlag == 2) {
+        else if (methodFlag == 1 || methodFlag == 2 || methodFlag == 7 || methodFlag == 3) {
             if (viewHullOnly) {
                 glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
                 glDrawArrays(GL_LINE_LOOP, 0, boundary.size());
@@ -647,26 +691,6 @@ int main() {
                 glDrawArrays(GL_LINE_LOOP, 0, boundary.size());
             }
             
-        }
-        else if (methodFlag == 3) {
-            if (viewHullOnly) {
-                glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
-                glDrawArrays(GL_LINE_LOOP, 0, boundary.size());
-            }
-            else if (pointSelect) {
-                glPointSize(4);
-                glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
-                glDrawArrays(GL_POINTS, 0, points.size());
-                glPointSize(1);
-            }
-            else {
-                glPointSize(4);
-                glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
-                glDrawArrays(GL_POINTS, 0, points.size());
-                glPointSize(1);
-                glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
-                glDrawArrays(GL_LINE_LOOP, 0, boundary.size());
-            }
         }
         else if (methodFlag == 4) {
             if (viewHullOnly) {
@@ -746,7 +770,7 @@ int main() {
                 }
             }
         }
-        else if (methodFlag == 6) {
+        else if (methodFlag == 6 || methodFlag == 8) {
             if (viewHullOnly) {
                 if (boundary.size()) {
                     glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
@@ -876,6 +900,12 @@ int main() {
                             pointSet.insert(make_pair(i.x, i.y));
                         loadPointsQuickHull(pointSet);
                     }
+                    if (prevMethodFlag == 8) {
+                        set <pair<double, double> > pointSet;
+                        for (auto i : points)
+                            pointSet.insert(make_pair(i.x, i.y));
+                        loadPointsAndrewMonotone(pointSet);
+                    }
                     convexHullLibrary(prevMethodFlag);
                 }
                 /*lines.clear();
@@ -893,12 +923,14 @@ int main() {
             ImGui::RadioButton("Slow Convex Hull", &methodFlag, 0); ImGui::SameLine();
             ImGui::RadioButton("Graham Scan", &methodFlag, 1); ImGui::SameLine();
             ImGui::RadioButton("Jarvis March", &methodFlag, 2); ImGui::SameLine();
-            ImGui::RadioButton("Quick Hull", &methodFlag, 3);
+            ImGui::RadioButton("Quick Hull", &methodFlag, 3);ImGui::SameLine();
+            ImGui::RadioButton("Andrew Monotone", &methodFlag, 7);
 
             //Visualizations
             ImGui::RadioButton("Graham Visulaization", &methodFlag, 5);
             ImGui::RadioButton("Jarvis Visulaization", &methodFlag, 4);
             ImGui::RadioButton("Quick Visulaization", &methodFlag, 6);
+            ImGui::RadioButton("Andrew Visulaization", &methodFlag, 8);
 
 
             ImGui::Checkbox("Anti-aliasing", &AAFlag);

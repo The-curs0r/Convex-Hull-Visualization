@@ -202,7 +202,7 @@ void grahamScan(const set<pair<double, double> > vertices, vector<pair<double, d
 
 	for (unsigned int i = 3; i < inputVertices.size(); i++)
 	{
-		while (orientation(secondPoint(currentConvexHull), currentConvexHull.top(), inputVertices[i]))
+		while (currentConvexHull.size()>=2 && orientation(secondPoint(currentConvexHull), currentConvexHull.top(), inputVertices[i]))
 			currentConvexHull.pop();
 		currentConvexHull.push(inputVertices[i]);
 	}
