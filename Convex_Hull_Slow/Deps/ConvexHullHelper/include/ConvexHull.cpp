@@ -26,6 +26,7 @@
 #include "GrahamScan.hpp"
 #include "JarvisMarch.hpp"
 #include "QuickHull.hpp"
+#include "AndrewMonotone.hpp"
 
 #include <iostream>
 
@@ -227,6 +228,37 @@ vector<pair<double, double> > findConvexHullQuickHull(set<pair<double, double> >
 	auto stop = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 	cout << "Return from function call in : " << duration.count() << " microseconds for Quick Hull\n";
+
+	vector<pair<double, double> > outputHull(convexHullPoints.begin(), convexHullPoints.end());
+	return outputHull;
+}
+
+
+std::vector<std::pair<double, double> > findConvexHullAndrewMonotone(std::set<std::pair<double, double> > inputPoints)
+{
+	vector<pair<double, double> > convexHullPoints;
+
+	auto start = std::chrono::high_resolution_clock::now();
+	andrewMonotone(inputPoints, convexHullPoints);
+	auto stop = std::chrono::high_resolution_clock::now();
+	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+	cout << "Return from function call in : " << duration.count() << " microseconds for Andrew's Algorithm\n";
+
+	vector<pair<double, double> > outputHull(convexHullPoints.begin(), convexHullPoints.end());
+	return outputHull;
+}
+vector<pair<double, double> > findConvexHullAndrewMonotone(vector<pair<double, double> > inputPoints) {
+	set<pair<double, double> > points;
+	vector<pair<double, double> > convexHullPoints;
+	for (auto point : inputPoints) {
+		points.insert(point);
+	}
+
+	auto start = std::chrono::high_resolution_clock::now();
+	andrewMonotone(points, convexHullPoints);
+	auto stop = std::chrono::high_resolution_clock::now();
+	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+	cout << "Return from function call in : " << duration.count() << " microseconds for Andrew's Algorithm\n";
 
 	vector<pair<double, double> > outputHull(convexHullPoints.begin(), convexHullPoints.end());
 	return outputHull;

@@ -17,6 +17,7 @@ glad.c
 *.png
 Deps/dear_imgui/
 Deps/glad/
+Deps/glfw_32/
 Deps/glfw_64/
 imgui.ini
 

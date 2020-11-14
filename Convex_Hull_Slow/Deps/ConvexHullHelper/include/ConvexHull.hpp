@@ -126,4 +126,6 @@ std::vector<std::pair<double, double> > findConvexHullQuickHull(std::vector<std:
 */
 std::vector<std::pair<double, double> > findConvexHullQuickHull(std::set<std::pair<double, double> > inputPoints);
 
+std::vector<std::pair<double, double> > findConvexHullAndrewMonotone(std::set<std::pair<double, double> > inputPoints);
+std::vector<std::pair<double, double> > findConvexHullAndrewMonotone(std::vector<std::pair<double, double> > inputPoints);
 #endif // !CONVEXHULL_HPP
