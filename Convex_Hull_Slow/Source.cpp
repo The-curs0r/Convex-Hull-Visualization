@@ -74,7 +74,7 @@ GLuint fbo, resTex, resDep;
 
 GLuint mul_fbo, mul_resTex, mul_resDep;
 
-int clear = 0, pointSelect = 0, findConvexHull = 0, takeImage = 0;
+int clear = 0, pointSelect = 0, findConvexHull = 0, takeImage = 0, paused = 0, nextStep=0;
 bool viewHullOnly = false, AAFlag = false, prevAAFlag = false;
 
 int visited = 0, numPoints = 10;
@@ -218,7 +218,6 @@ void convexHullLibrary(int method) {
         nextIterationQuickHull();
         vector<pair<double, double> > hull = getCurrentHullQuickHull();
         //NOTE - Z COORDINATE IS COLOR FOR NOW
-        //cout << getStackSize() << "\n";
         for (auto i : hull) {
             boundary.push_back(glm::vec3(i.first, i.second, 0.0f));
         }
@@ -280,7 +279,6 @@ void convexHullLibrary(int method) {
         break;
     }
 
-
     boundary.clear();
     lines.clear();
 
@@ -289,7 +287,6 @@ void convexHullLibrary(int method) {
         boundary.push_back(glm::vec3(i.first, i.second, 0.0f));
     }
 
-    cout << hull.size() << "\n";
     hull.clear();
     inputPoints.clear();
     return;
@@ -550,9 +547,10 @@ int main() {
         ImGui::NewFrame();
 
         if (fCounter % 1000 == 0) {
-            if (pointSelect == 0 && points.size() > 1 && methodFlag - 4 >= 0) {
+            fCounter = 1;
+            if (nextStep || (!paused && pointSelect == 0 && points.size() > 1 && methodFlag - 4 >= 0)) {
+                nextStep = 0;
                 convexHullLibrary(methodFlag);
-                fCounter = 1;
             }
         }
 
@@ -697,11 +695,6 @@ int main() {
                 glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3), &points[0], GL_STATIC_DRAW);
                 glDrawArrays(GL_POINTS, 0, points.size());
                 glPointSize(1);
-                /*if (currentCheck.size() >= 2)
-                {
-                    glBufferData(GL_ARRAY_BUFFER, currentCheck.size() * sizeof(glm::vec3), &currentCheck[0], GL_STATIC_DRAW);
-                    glDrawArrays(GL_LINE_LOOP, 0, currentCheck.size());
-                }*/
                 if (boundary.size() >= 2)
                 {
                     glBufferData(GL_ARRAY_BUFFER, boundary.size() * sizeof(glm::vec3), &boundary[0], GL_STATIC_DRAW);
@@ -776,52 +769,39 @@ int main() {
 
             ImGui::Dummy(ImVec2(0.0f, 20.0f));
             if (ImGui::Button("Find Convex Hull")) {
-                if (prevMethodFlag == 0) {
-                    lines.clear();
-                    visited = 0;
-                    fCounter = 0;
-                    if (points.size()) {
-                        cout << points[0].x << " " << points[0].y << "\n";
-                        pointSelect = 0;
-                    }
+                boundary.clear();
+                lines.clear();
+                visited = 0;
+                fCounter = 0;
+                if (points.size()) {
+                    pointSelect = 0;
                 }
-                else {
-                    boundary.clear();
-                    lines.clear();
-                    visited = 0;
-                    fCounter = 0;
-                    if (points.size()) {
-                        cout << points[0].x << " " << points[0].y << "\n";
-                        pointSelect = 0;
-                    }
-
-                    //Fix this
-                    if (prevMethodFlag == 7) {
-                        set <pair<double, double> > pointSet;
-                        for (auto i : points)
-                            pointSet.insert(make_pair(i.x, i.y));
-                        loadPointsJarvis(pointSet);
-                    }
-                    if (prevMethodFlag == 5) {
-                        set <pair<double, double> > pointSet;
-                        for (auto i : points)
-                            pointSet.insert(make_pair(i.x, i.y));
-                        loadPointsGraham(pointSet);
-                    }
-                    if (prevMethodFlag == 6) {
-                        set <pair<double, double> > pointSet;
-                        for (auto i : points)
-                            pointSet.insert(make_pair(i.x, i.y));
-                        loadPointsQuickHull(pointSet);
-                    }
-                    if (prevMethodFlag == 8) {
-                        set <pair<double, double> > pointSet;
-                        for (auto i : points)
-                            pointSet.insert(make_pair(i.x, i.y));
-                        loadPointsAndrewMonotone(pointSet);
-                    }
-                    convexHullLibrary(prevMethodFlag);
+                //Fix this
+                if (prevMethodFlag == 7) {
+                    set <pair<double, double> > pointSet;
+                    for (auto i : points)
+                        pointSet.insert(make_pair(i.x, i.y));
+                    loadPointsJarvis(pointSet);
                 }
+                if (prevMethodFlag == 5) {
+                    set <pair<double, double> > pointSet;
+                    for (auto i : points)
+                        pointSet.insert(make_pair(i.x, i.y));
+                    loadPointsGraham(pointSet);
+                }
+                if (prevMethodFlag == 6) {
+                    set <pair<double, double> > pointSet;
+                    for (auto i : points)
+                        pointSet.insert(make_pair(i.x, i.y));
+                    loadPointsQuickHull(pointSet);
+                }
+                if (prevMethodFlag == 8) {
+                    set <pair<double, double> > pointSet;
+                    for (auto i : points)
+                        pointSet.insert(make_pair(i.x, i.y));
+                    loadPointsAndrewMonotone(pointSet);
+                }
+                convexHullLibrary(prevMethodFlag);
             }
             ImGui::SameLine();
             ImGui::Dummy(ImVec2(10.0f, 0.0f));
@@ -842,6 +822,17 @@ int main() {
             ImGui::RadioButton("Jarvis Visulaization", &methodFlag, 7);
             ImGui::RadioButton("Quick Visulaization", &methodFlag, 6);
             ImGui::RadioButton("Andrew Visulaization", &methodFlag, 8);
+            if (ImGui::Button("Pause")) {
+                paused = 1;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Resume")) {
+                paused = 0;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Next Step")) {
+                nextStep = 1;
+            }
 
             ImGui::Dummy(ImVec2(0.0f, 20.0f));
             ImGui::Text("Utility");
@@ -880,8 +871,6 @@ int main() {
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
-    std::cout << lines.size() << "\n";
 
     shaderProg.deleteProg();
     cleanUp();
