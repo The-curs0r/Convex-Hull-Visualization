@@ -448,8 +448,8 @@ void takeSS() {
     fclose(f_out);
 
     //Converting to PNG
-    //WinExec("cd ..", 1);
-    WinExec("magick \"./ScreenShot.tga\" -flip \"./Output.png\"", 1);
+    WinExec("cd ..", 1);
+    WinExec("magick \"./Texture.tga\" -flip \"./Output.png\"", 1);
 
     return;
 }
