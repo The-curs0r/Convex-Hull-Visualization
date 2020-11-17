@@ -449,7 +449,7 @@ void takeSS() {
 
     //Converting to PNG
     WinExec("cd ..", 1);
-    WinExec("magick \"./Texture.tga\" -flip \"./Output.png\"", 1);
+    WinExec("magick \"./ScreenShot.tga\" -flip \"./Output.png\"", 1);
 
     return;
 }
